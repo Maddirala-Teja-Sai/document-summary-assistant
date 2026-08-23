@@ -1,8 +1,7 @@
 """
-Tests for summarizer.py and pdf_export.py (Component 4).
+Tests for summarizer.py and pdf_export.py.
 
-Also includes the end-to-end pipeline test (test_pipeline.py content
-lives here for simplicity).
+Also includes the end-to-end pipeline test.
 
 Run with:
     cd backend
@@ -67,7 +66,6 @@ class TestExtractiveSummary:
     def test_respects_sentence_count(self):
         from app.services.summarizer import extractive_summary
         result = extractive_summary(LONG_TEXT, sentence_count=3)
-        # May return up to 3 (could be less if short sentences filtered)
         assert len(result) <= 3
 
     def test_returns_more_for_larger_count(self):
@@ -83,7 +81,6 @@ class TestExtractiveSummary:
 
     def test_short_document_does_not_raise(self):
         from app.services.summarizer import extractive_summary
-        # Only 2 sentences — asking for 7 should not crash
         result = extractive_summary(
             "Machine learning is powerful. It learns from data.",
             sentence_count=7,
@@ -115,13 +112,6 @@ class TestGenerateSummaryPDF:
     def _make_payload(self, sentences=None):
         """Build a minimal PDFExportRequest-like object."""
         from types import SimpleNamespace
-        entities = SimpleNamespace(
-            persons=["Alice Smith"],
-            organizations=["Acme Corp"],
-            dates=["January 2026"],
-            locations=["New York"],
-            money=["$50,000"],
-        )
         return SimpleNamespace(
             filename="test_resume.pdf",
             document_type="resume",
@@ -130,7 +120,10 @@ class TestGenerateSummaryPDF:
                 "Alice Smith is a senior engineer.",
                 "She joined Acme Corp in January 2026.",
             ],
-            entities=entities,
+            suggestions=[
+                "Add measurable metrics to project bullets.",
+                "Highlight core technologies near the top."
+            ],
         )
 
     def test_returns_bytes(self):
@@ -141,29 +134,12 @@ class TestGenerateSummaryPDF:
     def test_is_valid_pdf(self):
         from app.utils.pdf_export import generate_summary_pdf
         pdf = generate_summary_pdf(self._make_payload())
-        # All PDFs start with the %PDF magic bytes
         assert pdf[:4] == b"%PDF"
 
     def test_non_empty_output(self):
         from app.utils.pdf_export import generate_summary_pdf
         pdf = generate_summary_pdf(self._make_payload())
         assert len(pdf) > 1024, "PDF should be at least 1 KB"
-
-    def test_handles_empty_entities(self):
-        from types import SimpleNamespace
-        from app.utils.pdf_export import generate_summary_pdf
-        payload = SimpleNamespace(
-            filename="blank.pdf",
-            document_type="general document",
-            summary="• No specific entities found.",
-            key_sentences=["No specific entities found."],
-            entities=SimpleNamespace(
-                persons=[], organizations=[], dates=[],
-                locations=[], money=[],
-            ),
-        )
-        pdf = generate_summary_pdf(payload)
-        assert pdf[:4] == b"%PDF"
 
     def test_handles_xml_special_chars(self):
         from types import SimpleNamespace
@@ -173,11 +149,8 @@ class TestGenerateSummaryPDF:
             document_type="contract",
             summary="• Revenue > $500k & profit < 10%.",
             key_sentences=["Revenue > $500k & profit < 10%."],
-            entities=SimpleNamespace(
-                persons=[], organizations=[], dates=[], locations=[], money=["$500k"],
-            ),
+            suggestions=["Clarify terms for > 10% profit thresholds."],
         )
-        # Should not raise despite & < > in text
         pdf = generate_summary_pdf(payload)
         assert pdf[:4] == b"%PDF"
 
@@ -188,27 +161,20 @@ class TestGenerateSummaryPDF:
 
 class TestEndToEndPipeline:
     """
-    Runs the full pipeline (extract → classify → NER → summarise) on a
-    synthetic in-memory PDF. Requires all backend dependencies to be installed.
+    Runs the full pipeline (extract → classify → summarise) on a
+    synthetic in-memory PDF.
     """
 
     @pytest.fixture(autouse=True)
     def require_deps(self):
         pytest.importorskip("PyPDF2")
         pytest.importorskip("sumy")
-        pytest.importorskip("spacy")
-        import spacy
-        try:
-            spacy.load("en_core_web_sm")
-        except OSError:
-            pytest.skip("spaCy model 'en_core_web_sm' not installed.")
 
     def _make_pdf(self, text: str) -> bytes:
         import io
         from reportlab.pdfgen import canvas
         buf = io.BytesIO()
         c = canvas.Canvas(buf)
-        # Write text in chunks (canvas has a line-length limit)
         y = 750
         for line in text.splitlines():
             c.drawString(50, y, line[:90])
@@ -223,7 +189,6 @@ class TestEndToEndPipeline:
         from app.utils.file_handler import detect_file_type
         from app.services.text_extraction import extract_text
         from app.services.classification import classify_document
-        from app.services.ner import extract_entities
         from app.services.summarizer import extractive_summary
 
         resume_text = (
@@ -253,13 +218,7 @@ class TestEndToEndPipeline:
         assert label == "resume"
         assert confidence > 0.0
 
-        # Step 4 — NER
-        entities = extract_entities(extraction["text"])
-        assert isinstance(entities, dict)
-        assert set(entities.keys()) == {"persons", "organizations", "dates", "locations", "money"}
-
-        # Step 5 — summarise
+        # Step 4 — summarise
         sentences = extractive_summary(extraction["text"], sentence_count=3)
         assert isinstance(sentences, list)
-        # Should find at least 1 sentence from a non-trivial text
         assert len(sentences) >= 1

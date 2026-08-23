@@ -1,5 +1,5 @@
 """
-Tests for classification.py and ner.py (Component 3).
+Tests for classification.py.
 
 Run with:
     cd backend
@@ -10,9 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# classification.py tests
-# ---------------------------------------------------------------------------
 
 class TestClassifyDocument:
     def test_classifies_resume(self):
@@ -112,71 +109,3 @@ class TestGetSummaryFocus:
         from app.services.classification import get_summary_focus
         focus = get_summary_focus("something totally unknown")
         assert focus == "Main ideas & key points"
-
-
-# ---------------------------------------------------------------------------
-# ner.py tests
-# ---------------------------------------------------------------------------
-
-class TestExtractEntities:
-    """
-    These tests require spaCy en_core_web_sm to be installed.
-    Skip gracefully if the model is not available.
-    """
-
-    @pytest.fixture(autouse=True)
-    def require_spacy(self):
-        pytest.importorskip("spacy")
-        import spacy
-        try:
-            spacy.load("en_core_web_sm")
-        except OSError:
-            pytest.skip("spaCy model 'en_core_web_sm' not installed.")
-
-    def test_returns_expected_keys(self):
-        from app.services.ner import extract_entities
-        result = extract_entities("Hello world.")
-        assert set(result.keys()) == {"persons", "organizations", "dates", "locations", "money"}
-
-    def test_extracts_person(self):
-        from app.services.ner import extract_entities
-        result = extract_entities("Albert Einstein was born in Germany.")
-        assert any("Einstein" in p or "Albert Einstein" in p for p in result["persons"])
-
-    def test_extracts_organization(self):
-        from app.services.ner import extract_entities
-        result = extract_entities("She joined Google in 2022 and worked with Microsoft.")
-        orgs = [o.lower() for o in result["organizations"]]
-        assert "google" in orgs or "microsoft" in orgs
-
-    def test_extracts_location(self):
-        from app.services.ner import extract_entities
-        result = extract_entities("The conference was held in Paris, France.")
-        locations = [l.lower() for l in result["locations"]]
-        assert "paris" in locations or "france" in locations
-
-    def test_extracts_date(self):
-        from app.services.ner import extract_entities
-        result = extract_entities("The deadline is January 15, 2026.")
-        assert len(result["dates"]) > 0
-
-    def test_empty_text_returns_empty_lists(self):
-        from app.services.ner import extract_entities
-        result = extract_entities("")
-        assert all(v == [] for v in result.values())
-
-    def test_all_values_are_sorted_lists(self):
-        from app.services.ner import extract_entities
-        result = extract_entities(
-            "Apple and Google are based in California. Tim Cook leads Apple."
-        )
-        for key, value in result.items():
-            assert isinstance(value, list), f"{key} should be a list"
-            assert value == sorted(value), f"{key} should be sorted"
-
-    def test_deduplicates_entities(self):
-        from app.services.ner import extract_entities
-        # Repeat the same entity multiple times — should appear only once
-        result = extract_entities("Google acquired the startup. Google is a big company. Google announced earnings.")
-        google_count = result["organizations"].count("Google")
-        assert google_count == 1
