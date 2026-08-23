@@ -8,7 +8,8 @@ Startup sequence:
      - Groq API key is checked (warning logged if missing).
      - NLTK tokenizer data downloaded (needed by local fallback).
   4. All API routes are registered under the /api prefix.
-  5. A global exception handler formats unexpected errors as JSON.
+  5. A root endpoint (/) returns service metadata.
+  6. A global exception handler formats unexpected errors as JSON.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import router
-from app.config import ALLOWED_ORIGINS, GROQ_API_KEY
+from app.config import GROQ_API_KEY
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -89,14 +90,14 @@ app = FastAPI(
 
 
 # ---------------------------------------------------------------------------
-# Middleware
+# Middleware (Allow all origins for seamless Vercel / local connection)
 # ---------------------------------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -118,7 +119,18 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Root Endpoint & Routes
 # ---------------------------------------------------------------------------
+
+@app.get("/", summary="Root status")
+async def root():
+    return {
+        "status": "online",
+        "service": "Document Summary Assistant API",
+        "docs": "/docs",
+        "health": "/api/health",
+        "version": "2.0.0",
+    }
+
 
 app.include_router(router)
