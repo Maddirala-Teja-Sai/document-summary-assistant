@@ -29,33 +29,112 @@ An AI-powered web application that accepts documents (PDFs or scanned images), e
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
+
+![Document Summary Assistant Architecture](docs/architecture.png)
+
+### Architectural Flow Diagram
+
+```mermaid
+flowchart TD
+    subgraph Client["Client Tier (Vercel)"]
+        UI["React 18 + Vite SPA"]
+        DZ["Drag-and-Drop / File Picker"]
+        LS["Length Selector (Short/Med/Long)"]
+        RES["Summary View & Export"]
+        UI --> DZ
+        UI --> LS
+        DZ -->|multipart/form-data| API_REQ["HTTP API Request"]
+    end
+
+    subgraph Backend["Application Tier (Render / Docker)"]
+        GW["FastAPI Ingestion Gateway"]
+        VAL["File Validation (Magic Bytes & Size)"]
+        
+        GW --> VAL
+        
+        subgraph Extraction["Extraction Subsystem"]
+            ROUTE{"File Type"}
+            PDF_P["PyPDF2 (Text Parser)"]
+            OCR_P["Tesseract OCR Engine"]
+            VAL --> ROUTE
+            ROUTE -->|Native PDF| PDF_P
+            ROUTE -->|Image / Scanned| OCR_P
+        end
+
+        subgraph Engine["Intelligence Engine"]
+            CHECK{"Groq API Available?"}
+            LLM["Groq LPU Inference (Llama 3.3 / GPT-OSS)"]
+            FALLBACK["Local Fallback (TextRank + Heuristics)"]
+            PDF_P --> CHECK
+            OCR_P --> CHECK
+            CHECK -->|Yes| LLM
+            CHECK -->|No / Timeout| FALLBACK
+        end
+
+        subgraph ResponseGen["Response & Export"]
+            NORM["Structured JSON Normalizer"]
+            PDF_EXP["ReportLab PDF Generator"]
+            LLM --> NORM
+            FALLBACK --> NORM
+            NORM -->|JSON Response| RES
+            NORM --> PDF_EXP
+        end
+    end
+
+    API_REQ --> GW
+```
+
+---
+
+### Layer-by-Layer Architectural Breakdown
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                   React + Vite Frontend                  │
-│   (Drag-and-Drop, Length Selector, Preview & Export)     │
-└────────────────────────────┬─────────────────────────────┘
-                             │ HTTP POST (multipart/form-data)
-┌────────────────────────────▼─────────────────────────────┐
-│                    FastAPI Backend                       │
-├──────────────────────────────────────────────────────────┤
-│  1. Ingestion & Validation (File magic bytes & size)     │
-│  2. Text Extraction:                                     │
-│     ├── Native PDF ───► PyPDF2                           │
-│     └── Scanned Image ──► Tesseract OCR                  │
-│  3. Intelligence Engine:                                 │
-│     ├── Primary ───► Groq High-Speed LLM Inference       │
-│     └── Fallback ──► TextRank (Sumy) + Heuristics        │
-│  4. Export Generation (ReportLab PDF / Plain text)       │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. PRESENTATION LAYER (React + Vite + Tailwind CSS)                         │
+│    • Client-side file type & 10MB size validation before upload             │
+│    • Granular summary length controls (Short: ~3-4, Med: ~7, Long: ~12)     │
+│    • Asynchronous loading states and error boundaries                       │
+│    • Responsive UI with dark/light mode persistence and export actions      │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ POST /api/summarize (multipart/form-data)
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│ 2. INGESTION & GATEWAY LAYER (FastAPI + Pydantic)                           │
+│    • Magic-byte verification via puremagic (detects disguised extensions)   │
+│    • Non-blocking async I/O with Starlette threadpool offloading            │
+│    • Global exception handling with uniform JSON error schemas              │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│ 3. EXTRACTION SUBSYSTEM                                                     │
+│    • Native PDF: High-speed page-by-page text extraction via PyPDF2         │
+│    • Scanned Images/PDFs: Optical Character Recognition (OCR) via Tesseract │
+│    • Automatic fallback to OCR if extracted PDF text is sparse/scanned      │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ Extracted Text Stream
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│ 4. INTELLIGENCE ENGINE (Dual-Path Processing)                               │
+│    • Primary: Cloud-accelerated Groq LPU inference delivering single-pass:  │
+│        - Abstractive smart summaries                                        │
+│        - Document classification & confidence scoring                       │
+│        - Verbatim key takeaway sentences                                    │
+│        - Actionable document improvement suggestions                        │
+│    • Fallback: Zero-dependency local pipeline (TextRank graph algorithm     │
+│      + keyword pattern matching) if API limits or connectivity drop         │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│ 5. EXPORT & ARTIFACT GENERATION                                             │
+│    • ReportLab PDF generator compiling clean styled report cards            │
+│    • Formatted plain text (.txt) generator & system clipboard exporter      │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React, Vite, Tailwind CSS, Axios, React Icons, React Dropzone.
+- **Frontend**: React 18, Vite, Tailwind CSS, Axios, React Icons, React Dropzone.
 - **Backend**: Python 3.11+, FastAPI, Uvicorn, Pydantic, python-multipart.
 - **AI/ML & Extraction**: Groq Python SDK, PyPDF2, Pytesseract (Tesseract OCR), Pillow, Sumy (TextRank), NLTK.
 - **Export & Storage**: ReportLab, PureMagic.
