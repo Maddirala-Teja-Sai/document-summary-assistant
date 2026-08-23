@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: doc-summary-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false   # Set this in the Render dashboard — never commit the real key
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+    healthCheckPath: /api/health

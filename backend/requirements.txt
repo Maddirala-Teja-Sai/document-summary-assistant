@@ -1,0 +1,24 @@
+# Document Summary Assistant — Backend
+# No credit card needed. Get a free Groq API key at https://console.groq.com
+
+# ── Web framework ───────────────────────────────────────────────────────────
+fastapi==0.115.*
+uvicorn[standard]==0.34.*
+python-multipart==0.0.*
+
+# ── LLM API (primary pipeline) ───────────────────────────────────────────────
+groq==0.25.*
+
+# ── File handling ────────────────────────────────────────────────────────────
+PyPDF2==3.*
+Pillow==11.*
+pytesseract==0.3.*
+puremagic==1.*
+
+# ── Local fallback pipeline (used if Groq API is unavailable) ────────────────
+spacy==3.*
+sumy==0.11.*
+nltk==3.*
+
+# ── PDF export ───────────────────────────────────────────────────────────────
+reportlab==4.*
